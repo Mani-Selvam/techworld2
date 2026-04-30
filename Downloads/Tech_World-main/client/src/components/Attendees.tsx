@@ -1,4 +1,3 @@
-// src/components/AttendeesDemographics.jsx
 import {
     TrendingUp,
     BarChart3,
@@ -11,107 +10,236 @@ import {
     Sparkles,
     ArrowUp,
 } from "lucide-react";
-import { motion } from "framer-motion";
+import { useRef, useState, useEffect } from "react";
 
-export default function AttendeesDemographics() {
-    const demographics = [
-        {
-            percentage: "83%",
-            category: "Crypto traders",
-            color: "from-purple-500 to-pink-500",
-            icon: BarChart3,
-            image: "https://blockchain-life.com/wp-content/uploads/2023/11/traders.jpg",
-            description: "Professional traders and investors",
-        },
-        {
-            percentage: "80%",
-            category: "Students",
-            color: "from-blue-500 to-cyan-500",
-            icon: Pickaxe,
-            image: "https://blockchain-life.com/wp-content/uploads/2023/11/miners.jpg",
-            description: "University and college students",
-        },
-        {
-            percentage: "70%",
-            category: "Developers",
-            color: "from-green-500 to-emerald-500",
-            icon: Code,
-            image: "https://blockchain-life.com/wp-content/uploads/2023/11/developers.jpg",
-            description: "Software developers and engineers",
-        },
-        {
-            percentage: "67%",
-            category: "Investors/Funds",
-            color: "from-orange-500 to-red-500",
-            icon: TrendingUp,
-            image: "https://blockchain-life.com/wp-content/uploads/2023/11/investors.jpg",
-            description: "Institutional and retail investors",
-        },
-        {
-            percentage: "47%",
-            category: "Entrepreneurs",
-            color: "from-indigo-500 to-purple-500",
-            icon: Users,
-            image: "https://blockchain-life.com/wp-content/uploads/2023/11/entrepreneurs.jpg",
-            description: "Business owners and founders",
-        },
-        {
-            percentage: "24%",
-            category: "Startups",
-            color: "from-pink-500 to-rose-500",
-            icon: Rocket,
-            image: "https://blockchain-life.com/wp-content/uploads/2023/11/startups.jpg",
-            description: "Early-stage companies",
-        },
-        {
-            percentage: "26%",
-            category: "Service providers",
-            color: "from-cyan-500 to-blue-500",
-            icon: Settings,
-            image: "https://blockchain-life.com/wp-content/uploads/2023/11/services.jpg",
-            description: "Consultants and service companies",
-        },
-        {
-            percentage: "4%",
-            category: "Others",
-            color: "from-gray-500 to-slate-500",
-            icon: MoreHorizontal,
-            image: "https://blockchain-life.com/wp-content/uploads/2023/11/others.jpg",
-            description: "Various other professionals",
-        },
-    ];
+// ─── Static data — outside component, never recreated ────────────────────────
+const DEMOGRAPHICS = [
+    {
+        pct: 83,
+        category: "Crypto traders",
+        description: "Professional traders and investors",
+        icon: BarChart3,
+        grad: "from-purple-500 to-pink-500",
+        stroke: "#a855f7",
+    },
+    {
+        pct: 80,
+        category: "Students",
+        description: "University and college students",
+        icon: Pickaxe,
+        grad: "from-blue-500 to-cyan-500",
+        stroke: "#3b82f6",
+    },
+    {
+        pct: 70,
+        category: "Developers",
+        description: "Software developers and engineers",
+        icon: Code,
+        grad: "from-green-500 to-emerald-500",
+        stroke: "#22c55e",
+    },
+    {
+        pct: 67,
+        category: "Investors/Funds",
+        description: "Institutional and retail investors",
+        icon: TrendingUp,
+        grad: "from-orange-500 to-red-500",
+        stroke: "#f97316",
+    },
+    {
+        pct: 47,
+        category: "Entrepreneurs",
+        description: "Business owners and founders",
+        icon: Users,
+        grad: "from-indigo-500 to-purple-500",
+        stroke: "#6366f1",
+    },
+    {
+        pct: 24,
+        category: "Startups",
+        description: "Early-stage companies",
+        icon: Rocket,
+        grad: "from-pink-500 to-rose-500",
+        stroke: "#ec4899",
+    },
+    {
+        pct: 26,
+        category: "Service providers",
+        description: "Consultants and service companies",
+        icon: Settings,
+        grad: "from-cyan-500 to-blue-500",
+        stroke: "#06b6d4",
+    },
+    {
+        pct: 4,
+        category: "Others",
+        description: "Various other professionals",
+        icon: MoreHorizontal,
+        grad: "from-gray-500 to-slate-500",
+        stroke: "#6b7280",
+    },
+] as const;
 
-    const containerVariants = {
-        hidden: { opacity: 0 },
-        visible: {
-            opacity: 1,
-            transition: { staggerChildren: 0.1 },
-        },
-    };
+// SVG ring circumference for r=36: 2π×36 ≈ 226.2
+const CIRC = 226.2;
 
-    const cardVariants = {
-        hidden: { opacity: 0, y: 30, scale: 0.9 },
-        visible: {
-            opacity: 1,
-            y: 0,
-            scale: 1,
-            transition: { duration: 0.5, ease: "easeOut" },
-        },
-    };
+// ─── Keyframes — injected once ────────────────────────────────────────────────
+const KEYFRAMES = `
+  @keyframes adFadeUp  { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes adCardIn  { from{opacity:0;transform:translateY(28px) scale(.92)} to{opacity:1;transform:translateY(0) scale(1)} }
+  @keyframes adRing    { from{stroke-dashoffset:var(--circ)} to{stroke-dashoffset:var(--offset)} }
+`;
+if (typeof document !== "undefined" && !document.getElementById("ad-kf")) {
+    const s = document.createElement("style");
+    s.id = "ad-kf";
+    s.textContent = KEYFRAMES;
+    document.head.appendChild(s);
+}
+
+// ─── Single card ──────────────────────────────────────────────────────────────
+function DemoCard({
+    demo,
+    index,
+    visible,
+}: {
+    demo: (typeof DEMOGRAPHICS)[number];
+    index: number;
+    visible: boolean;
+}) {
+    const Icon = demo.icon;
+    const offset = CIRC - (demo.pct / 100) * CIRC;
 
     return (
-        <div className="relative py-16">
-            {/* Background Effects - Subtle, no pulsing animation */}
-            <div className="absolute inset-0 overflow-hidden hidden md:block">
-                <div className="absolute top-20 left-10 w-72 h-72 bg-purple-600 rounded-full mix-blend-multiply filter blur-3xl opacity-5"></div>
-                <div className="absolute bottom-20 right-10 w-96 h-96 bg-cyan-600 rounded-full mix-blend-multiply filter blur-3xl opacity-5"></div>
+        <div
+            className="group relative"
+            style={{
+                animation: visible
+                    ? `adCardIn 0.5s ease forwards ${index * 0.08}s`
+                    : "none",
+                opacity: visible ? undefined : 0,
+            }}>
+            {/* Glow border */}
+            <div
+                className={`absolute -inset-1 bg-gradient-to-r ${demo.grad} rounded-2xl blur opacity-25 group-hover:opacity-70 transition-opacity duration-300`}
+            />
+
+            {/* Card body */}
+            <div className="relative h-full bg-slate-900/80 border border-white/10 rounded-2xl p-6 flex flex-col overflow-hidden">
+                {/* Subtle gradient wash */}
+                <div
+                    className={`absolute inset-0 opacity-5 bg-gradient-to-br ${demo.grad} pointer-events-none`}
+                />
+
+                {/* Progress ring — CSS-animated stroke, correct SVG approach */}
+                <div className="relative mb-4 flex justify-center">
+                    <div className="relative w-20 h-20">
+                        <svg
+                            className="w-20 h-20 -rotate-90"
+                            viewBox="0 0 80 80">
+                            {/* Track */}
+                            <circle
+                                cx="40"
+                                cy="40"
+                                r="36"
+                                fill="none"
+                                stroke="#334155"
+                                strokeWidth="4"
+                            />
+                            {/* Progress — CSS animation via custom props */}
+                            <circle
+                                cx="40"
+                                cy="40"
+                                r="36"
+                                fill="none"
+                                stroke={demo.stroke}
+                                strokeWidth="4"
+                                strokeLinecap="round"
+                                strokeDasharray={CIRC}
+                                style={{
+                                    // CSS custom props for the keyframe
+                                    ["--circ" as string]: `${CIRC}`,
+                                    ["--offset" as string]: `${offset}`,
+                                    strokeDashoffset: visible ? offset : CIRC,
+                                    transition: visible
+                                        ? `stroke-dashoffset 1s ease ${index * 0.08 + 0.2}s`
+                                        : "none",
+                                }}
+                            />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="text-xl font-bold text-white">
+                                {demo.pct}%
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Icon */}
+                <div className="flex justify-center mb-4">
+                    <div
+                        className={`bg-gradient-to-r ${demo.grad} p-0.5 rounded-xl`}>
+                        <div className="bg-slate-900 rounded-xl p-3 flex items-center justify-center">
+                            <Icon className="w-6 h-6 text-white" />
+                        </div>
+                    </div>
+                </div>
+
+                <h3 className="text-lg font-bold text-white text-center mb-2">
+                    {demo.category}
+                </h3>
+                <p className="text-gray-400 text-sm text-center mb-4 flex-grow">
+                    {demo.description}
+                </p>
+
+                <div className="flex items-center justify-center text-green-400 text-sm">
+                    <ArrowUp className="w-4 h-4 mr-1" />
+                    <span>Growing segment</span>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+export default function AttendeesDemographics() {
+    const [visible, setVisible] = useState(false);
+    const ref = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const obs = new IntersectionObserver(
+            ([entry]) => {
+                if (entry.isIntersecting) {
+                    setVisible(true);
+                    obs.disconnect();
+                }
+            },
+            { threshold: 0.1 },
+        );
+        if (ref.current) obs.observe(ref.current);
+        return () => obs.disconnect();
+    }, []);
+
+    return (
+        <div ref={ref} className="relative py-16">
+            {/* Static ambient blobs */}
+            <div
+                className="absolute inset-0 overflow-hidden hidden md:block pointer-events-none"
+                aria-hidden>
+                <div className="absolute top-20 left-10 w-72 h-72 bg-purple-600 rounded-full mix-blend-multiply blur-3xl opacity-5" />
+                <div className="absolute bottom-20 right-10 w-96 h-96 bg-cyan-600 rounded-full mix-blend-multiply blur-3xl opacity-5" />
             </div>
 
-            {/* Main Container with Left and Right Gaps */}
             <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 xl:px-12">
-                {/* Section Title */}
-                <div className="text-center mb-16">
-                    <div className="inline-flex items-center gap-2 bg-purple-500/10 backdrop-blur-sm border border-purple-500/30 rounded-full px-4 py-2 mb-6">
+                {/* Title */}
+                <div
+                    className="text-center mb-16"
+                    style={{
+                        animation: visible
+                            ? "adFadeUp 0.6s ease forwards"
+                            : "none",
+                        opacity: visible ? undefined : 0,
+                    }}>
+                    <div className="inline-flex items-center gap-2 bg-purple-500/10 border border-purple-500/30 rounded-full px-4 py-2 mb-6">
                         <Sparkles className="w-4 h-4 text-purple-400" />
                         <span className="text-purple-300 text-sm font-medium">
                             Who Attends
@@ -128,102 +256,17 @@ export default function AttendeesDemographics() {
                     </p>
                 </div>
 
-                {/* Attendee Categories */}
-                <motion.div
-                    className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16"
-                    initial="hidden"
-                    whileInView="visible"
-                    viewport={{ once: true, margin: "-100px" }}
-                    variants={containerVariants}>
-                    {demographics.map((demo, index) => {
-                        const IconComponent = demo.icon;
-                        return (
-                            <motion.div
-                                key={index}
-                                className="group relative"
-                                variants={cardVariants}
-                                whileHover={{
-                                    y: -10,
-                                    transition: { duration: 0.3 },
-                                }}>
-                                {/* Card Glow Effect */}
-                                <div
-                                    className={`absolute -inset-1 bg-gradient-to-r ${demo.color} rounded-2xl blur opacity-25 group-hover:opacity-75 transition duration-1000 group-hover:duration-200`}></div>
-
-                                {/* Card Content */}
-                                <div className="relative h-full bg-slate-900/80 backdrop-blur-sm border border-white/10 rounded-2xl p-6 flex flex-col overflow-hidden">
-                                    {/* Background Pattern */}
-                                    <div className="absolute inset-0 opacity-5">
-                                        <div
-                                            className={`w-full h-full bg-gradient-to-br ${demo.color}`}></div>
-                                    </div>
-
-                                    {/* Progress Ring */}
-                                    <div className="relative mb-4 flex justify-center">
-                                        <div className="relative w-20 h-20">
-                                            <svg className="w-20 h-20 transform -rotate-90">
-                                                <circle
-                                                    cx="40"
-                                                    cy="40"
-                                                    r="36"
-                                                    stroke="currentColor"
-                                                    strokeWidth="4"
-                                                    fill="none"
-                                                    className="text-slate-700"
-                                                />
-                                                <circle
-                                                    cx="40"
-                                                    cy="40"
-                                                    r="36"
-                                                    stroke="currentColor"
-                                                    strokeWidth="4"
-                                                    fill="none"
-                                                    strokeDasharray={`${
-                                                        parseInt(
-                                                            demo.percentage
-                                                        ) * 2.26
-                                                    } 226`}
-                                                    className={`text-transparent bg-gradient-to-r ${demo.color} bg-clip-text`}
-                                                />
-                                            </svg>
-                                            <div className="absolute inset-0 flex items-center justify-center">
-                                                <span className="text-2xl font-bold text-white">
-                                                    {demo.percentage}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Icon */}
-                                    <div className="relative flex justify-center mb-4">
-                                        <div
-                                            className={`p-3 rounded-xl bg-gradient-to-r ${demo.color} p-0.5`}>
-                                            <div className="w-full h-full bg-slate-900 rounded-xl flex items-center justify-center">
-                                                <IconComponent className="w-6 h-6 text-white" />
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Category */}
-                                    <h3 className="text-lg font-bold text-white text-center mb-2">
-                                        {demo.category}
-                                    </h3>
-
-                                    {/* Description */}
-                                    <p className="text-gray-400 text-sm text-center mb-4 flex-grow">
-                                        {demo.description}
-                                    </p>
-
-                                    {/* Trend Indicator */}
-                                    <div className="flex items-center justify-center text-green-400 text-sm">
-                                        <ArrowUp className="w-4 h-4 mr-1" />
-                                        <span>Growing segment</span>
-                                    </div>
-                                </div>
-                            </motion.div>
-                        );
-                    })}
-                </motion.div>
+                {/* Cards grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
+                    {DEMOGRAPHICS.map((demo, i) => (
+                        <DemoCard
+                            key={demo.category}
+                            demo={demo}
+                            index={i}
+                            visible={visible}
+                        />
+                    ))}
+                </div>
             </div>
         </div>
     );

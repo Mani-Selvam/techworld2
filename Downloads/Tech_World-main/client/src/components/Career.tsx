@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Clock,
-    DollarSign,
     CheckCircle,
     ArrowRight,
     Zap,
@@ -15,6 +14,9 @@ import {
     ChevronLeft,
     ChevronRight,
 } from "lucide-react";
+
+// ✅ Fixed: module-level constant — no state, no resize listener, no re-renders
+const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
 
 const careerServices = [
     {
@@ -158,163 +160,191 @@ interface ExpandedItem {
 export default function Career() {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [expanded, setExpanded] = useState<ExpandedItem>({});
-    const [isAutoPlay, setIsAutoPlay] = useState(true);
-    const [isMobile, setIsMobile] = useState(false);
-    const [dragStart, setDragStart] = useState(0);
-    const [dragEnd, setDragEnd] = useState(0);
-    const autoPlayIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Detect mobile
-    useEffect(() => {
-        const checkMobile = () => {
-            setIsMobile(window.innerWidth < 768);
-        };
-        checkMobile();
-        window.addEventListener("resize", checkMobile);
-        return () => window.removeEventListener("resize", checkMobile);
-    }, []);
+    // ✅ Fixed: drag coords in refs — no state, no re-renders on touch
+    const dragStartRef = useRef(0);
+    const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-    // Auto-scroll functionality
-    useEffect(() => {
-        if (!isMobile || !isAutoPlay) return;
-
-        if (autoPlayIntervalRef.current) clearInterval(autoPlayIntervalRef.current);
-
-        autoPlayIntervalRef.current = setInterval(() => {
+    // ✅ Fixed: extracted so manual nav can reset it (same pattern as Testimonials/Ecosystem)
+    const startAutoPlay = () => {
+        if (!isMobile) return;
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        intervalRef.current = setInterval(() => {
             setCurrentIndex((prev) => (prev + 1) % careerServices.length);
         }, 4000);
+    };
 
+    useEffect(() => {
+        startAutoPlay();
         return () => {
-            if (autoPlayIntervalRef.current) clearInterval(autoPlayIntervalRef.current);
+            if (intervalRef.current) clearInterval(intervalRef.current);
         };
-    }, [isMobile, isAutoPlay]);
+    }, []);
 
     const toggleExpand = (id: number) => {
-        setExpanded((prev) => ({
-            ...prev,
-            [id]: !prev[id],
-        }));
+        setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
     };
 
     const handleWhatsAppClick = (serviceName: string) => {
-        const whatsappNumber = "+919345791995";
-        const whatsappMessage = `Hi 👋 I'm interested in "${serviceName}". Please share more details and available slots. 🚀`;
-        const url = `https://wa.me/${whatsappNumber.replace(/\s/g, "")}?text=${encodeURIComponent(whatsappMessage)}`;
-        window.open(url, "_blank");
+        const msg = `Hi 👋 I'm interested in "${serviceName}". Please share more details and available slots. 🚀`;
+        window.open(
+            `https://wa.me/919345791995?text=${encodeURIComponent(msg)}`,
+            "_blank",
+        );
     };
 
     const nextSlide = () => {
         setCurrentIndex((prev) => (prev + 1) % careerServices.length);
-        setIsAutoPlay(false);
+        startAutoPlay(); // ✅ Fixed: resets interval instead of permanently disabling
     };
 
     const prevSlide = () => {
-        setCurrentIndex((prev) => (prev - 1 + careerServices.length) % careerServices.length);
-        setIsAutoPlay(false);
+        setCurrentIndex(
+            (prev) =>
+                (prev - 1 + careerServices.length) % careerServices.length,
+        );
+        startAutoPlay();
     };
 
-    const handleDragStart = (e: React.TouchEvent) => {
-        setDragStart(e.touches[0].clientX);
-        setIsAutoPlay(false);
+    // ✅ Fixed: read touch value directly — no stale state race condition
+    const handleTouchStart = (e: React.TouchEvent) => {
+        dragStartRef.current = e.touches[0].clientX;
     };
 
-    const handleDragEnd = (e: React.TouchEvent) => {
-        setDragEnd(e.changedTouches[0].clientX);
-        handleSwipe();
-    };
-
-    const handleSwipe = () => {
-        if (dragStart - dragEnd > 50) {
-            nextSlide();
-        }
-        if (dragEnd - dragStart > 50) {
-            prevSlide();
-        }
+    const handleTouchEnd = (e: React.TouchEvent) => {
+        const dragEnd = e.changedTouches[0].clientX;
+        const delta = dragStartRef.current - dragEnd;
+        if (delta > 50) nextSlide();
+        else if (delta < -50) prevSlide();
     };
 
     const isMobileView = isMobile && careerServices.length > 1;
 
     return (
         <section className="relative py-16 md:py-20 overflow-hidden">
-            {/* Animated Background */}
+            {/* Background */}
             <div className="absolute inset-0 z-0">
-                <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, #000000 0%, #1a0033 25%, #0a0020 50%, #1a0033 75%, #000000 100%)" }} />
-                <motion.div className="absolute top-20 right-1/4 w-96 h-96 bg-purple-900/20 rounded-full filter blur-3xl" animate={{ y: [0, 40, 0] }} transition={{ duration: 10, repeat: Infinity }} />
-                <motion.div className="absolute bottom-20 left-1/3 w-96 h-96 bg-pink-900/15 rounded-full filter blur-3xl" animate={{ y: [0, -40, 0] }} transition={{ duration: 12, repeat: Infinity }} />
+                <div
+                    className="absolute inset-0"
+                    style={{
+                        background:
+                            "linear-gradient(135deg, #000000 0%, #1a0033 25%, #0a0020 50%, #1a0033 75%, #000000 100%)",
+                    }}
+                />
+                {/* ✅ Fixed: blobs desktop-only — removes 2 infinite loops from mobile */}
+                <div className="hidden md:block">
+                    <motion.div
+                        className="absolute top-20 right-1/4 w-96 h-96 bg-purple-900/20 rounded-full filter blur-3xl"
+                        animate={{ y: [0, 40, 0] }}
+                        transition={{
+                            duration: 10,
+                            repeat: Infinity,
+                            ease: "easeInOut",
+                        }}
+                    />
+                    <motion.div
+                        className="absolute bottom-20 left-1/3 w-96 h-96 bg-pink-900/15 rounded-full filter blur-3xl"
+                        animate={{ y: [0, -40, 0] }}
+                        transition={{
+                            duration: 12,
+                            repeat: Infinity,
+                            ease: "easeInOut",
+                        }}
+                    />
+                </div>
             </div>
 
             <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 {/* Header */}
-                <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }} className="mb-12 md:mb-16">
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.8 }}
+                    className="mb-12 md:mb-16">
                     <div className="inline-block mb-4">
+                        {/* ✅ Fixed: emoji removed from uppercased text */}
                         <span className="px-4 py-2 rounded-full bg-purple-500/20 border border-purple-400/50 text-purple-300 text-sm font-bold uppercase tracking-wider">
-                            🚀 Expert Consulting Services
+                            Expert Consulting Services
                         </span>
                     </div>
 
-                    <h2 className="text-4xl sm:text-5xl md:text-5xl font-black text-white mb-4 leading-tight">
+                    <h2 className="text-4xl sm:text-5xl font-black text-white mb-4 leading-tight">
                         Career & Consulting Services
                     </h2>
 
                     <p className="text-lg text-gray-300 max-w-3xl">
-                        Get personalized guidance from blockchain experts. Choose from workshops, 1-to-1 consultations, and hands-on internship programs tailored to your goals.
+                        Get personalized guidance from blockchain experts.
+                        Choose from workshops, 1-to-1 consultations, and
+                        hands-on internship programs tailored to your goals.
                     </p>
                 </motion.div>
 
                 {/* Mobile Carousel */}
                 {isMobileView ? (
                     <div className="mb-12">
-                        {/* Carousel Container */}
                         <div
                             className="relative overflow-hidden rounded-xl"
-                            onTouchStart={handleDragStart}
-                            onTouchEnd={handleDragEnd}
-                        >
+                            onTouchStart={handleTouchStart}
+                            onTouchEnd={handleTouchEnd}>
                             <AnimatePresence mode="wait">
                                 <motion.div
                                     key={currentIndex}
-                                    initial={{ opacity: 0, x: 300 }}
+                                    initial={{ opacity: 0, x: 200 }}
                                     animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, x: -300 }}
-                                    transition={{ duration: 0.5, type: "spring", stiffness: 300, damping: 30 }}
-                                >
+                                    exit={{ opacity: 0, x: -200 }}
+                                    transition={{
+                                        duration: 0.35,
+                                        ease: "easeOut",
+                                    }}>
                                     <ServiceCard
                                         service={careerServices[currentIndex]}
-                                        expanded={expanded[careerServices[currentIndex].id]}
-                                        onToggleExpand={() => toggleExpand(careerServices[currentIndex].id)}
-                                        onWhatsApp={() => handleWhatsAppClick(careerServices[currentIndex].title)}
+                                        expanded={
+                                            !!expanded[
+                                                careerServices[currentIndex].id
+                                            ]
+                                        }
+                                        onToggleExpand={() =>
+                                            toggleExpand(
+                                                careerServices[currentIndex].id,
+                                            )
+                                        }
+                                        onWhatsApp={() =>
+                                            handleWhatsAppClick(
+                                                careerServices[currentIndex]
+                                                    .title,
+                                            )
+                                        }
                                     />
                                 </motion.div>
                             </AnimatePresence>
                         </div>
 
-                        {/* Navigation Controls */}
+                        {/* Navigation */}
                         <div className="flex items-center justify-between mt-6 px-2">
                             <motion.button
                                 onClick={prevSlide}
-                                whileHover={{ scale: 1.1 }}
                                 whileTap={{ scale: 0.95 }}
-                                className="p-3 rounded-lg bg-purple-600/30 border border-purple-400/50 text-purple-300 hover:bg-purple-600/50 transition-all"
-                            >
+                                aria-label="Previous service"
+                                className="p-3 rounded-lg bg-purple-600/30 border border-purple-400/50 text-purple-300 hover:bg-purple-600/50 transition-all">
                                 <ChevronLeft className="w-5 h-5" />
                             </motion.button>
 
-                            {/* Slide Counter & Dots */}
                             <div className="flex flex-col items-center gap-3">
                                 <div className="flex gap-2">
                                     {careerServices.map((_, idx) => (
-                                        <motion.button
+                                        <button
                                             key={idx}
                                             onClick={() => {
                                                 setCurrentIndex(idx);
-                                                setIsAutoPlay(false);
+                                                startAutoPlay();
                                             }}
+                                            aria-label={`Go to service ${idx + 1}`}
                                             className={`h-2 rounded-full transition-all ${
                                                 idx === currentIndex
                                                     ? "bg-purple-500 w-8"
                                                     : "bg-purple-500/30 w-2 hover:bg-purple-500/50"
                                             }`}
-                                            whileHover={{ scale: 1.2 }}
                                         />
                                     ))}
                                 </div>
@@ -325,22 +355,13 @@ export default function Career() {
 
                             <motion.button
                                 onClick={nextSlide}
-                                whileHover={{ scale: 1.1 }}
                                 whileTap={{ scale: 0.95 }}
-                                className="p-3 rounded-lg bg-purple-600/30 border border-purple-400/50 text-purple-300 hover:bg-purple-600/50 transition-all"
-                            >
+                                aria-label="Next service"
+                                className="p-3 rounded-lg bg-purple-600/30 border border-purple-400/50 text-purple-300 hover:bg-purple-600/50 transition-all">
                                 <ChevronRight className="w-5 h-5" />
                             </motion.button>
                         </div>
-
-                        {/* Auto-play toggle */}
-                        <motion.button
-                            onClick={() => setIsAutoPlay(!isAutoPlay)}
-                            whileHover={{ scale: 1.05 }}
-                            className="w-full mt-6 py-2 text-xs font-semibold text-purple-300 border border-purple-500/30 rounded-lg hover:border-purple-400 hover:bg-purple-500/10 transition-all"
-                        >
-                            {isAutoPlay ? "⏸ Auto-playing" : "▶ Resume Auto-play"}
-                        </motion.button>
+                        {/* ✅ Fixed: removed auto-play toggle button — auto-play resets silently on manual nav */}
                     </div>
                 ) : (
                     /* Desktop Grid */
@@ -350,13 +371,20 @@ export default function Career() {
                                 key={service.id}
                                 initial={{ opacity: 0, y: 20 }}
                                 whileInView={{ opacity: 1, y: 0 }}
-                                transition={{ delay: idx * 0.1 }}
-                            >
+                                viewport={{ once: true }}
+                                transition={{
+                                    delay: idx * 0.08,
+                                    duration: 0.5,
+                                }}>
                                 <ServiceCard
                                     service={service}
-                                    expanded={expanded[service.id]}
-                                    onToggleExpand={() => toggleExpand(service.id)}
-                                    onWhatsApp={() => handleWhatsAppClick(service.title)}
+                                    expanded={!!expanded[service.id]}
+                                    onToggleExpand={() =>
+                                        toggleExpand(service.id)
+                                    }
+                                    onWhatsApp={() =>
+                                        handleWhatsAppClick(service.title)
+                                    }
                                 />
                             </motion.div>
                         ))}
@@ -364,18 +392,29 @@ export default function Career() {
                 )}
 
                 {/* Bottom CTA */}
-                <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.4 }} className="text-center pt-8 border-t border-white/10">
-                    <h3 className="text-2xl md:text-3xl font-bold text-white mb-4">Not Sure Which One?</h3>
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.8, delay: 0.4 }}
+                    className="text-center pt-8 border-t border-white/10">
+                    <h3 className="text-2xl md:text-3xl font-bold text-white mb-4">
+                        Not Sure Which One?
+                    </h3>
                     <p className="text-gray-300 mb-8 max-w-2xl mx-auto">
-                        Schedule a free discovery call with our career advisors to find the perfect program for your goals and aspirations.
+                        Schedule a free discovery call with our career advisors
+                        to find the perfect program for your goals and
+                        aspirations.
                     </p>
-
                     <motion.button
-                        onClick={() => handleWhatsAppClick("Free Discovery Call - Career Guidance")}
+                        onClick={() =>
+                            handleWhatsAppClick(
+                                "Free Discovery Call - Career Guidance",
+                            )
+                        }
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
-                        className="px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-lg font-bold flex items-center justify-center gap-2 mx-auto transition-all"
-                    >
+                        className="px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-lg font-bold flex items-center justify-center gap-2 mx-auto transition-all">
                         Schedule Free Call
                         <ArrowRight className="w-5 h-5" />
                     </motion.button>
@@ -392,94 +431,110 @@ interface ServiceCardProps {
     onWhatsApp: () => void;
 }
 
-function ServiceCard({ service, expanded, onToggleExpand, onWhatsApp }: ServiceCardProps) {
+function ServiceCard({
+    service,
+    expanded,
+    onToggleExpand,
+    onWhatsApp,
+}: ServiceCardProps) {
     const Icon = service.icon;
 
     return (
         <motion.div
             className={`relative group overflow-hidden rounded-xl border ${service.borderColor} ${service.bgColor} backdrop-blur-sm hover:border-white/50 transition-all duration-300 p-6`}
-            whileHover={{ y: -5 }}
-            transition={{ duration: 0.3 }}
-        >
-            {/* Header Section */}
+            whileHover={{ y: -4 }}
+            transition={{ duration: 0.25 }}>
+            {/* Header */}
             <div className="mb-5">
                 <div className="flex items-start justify-between mb-3">
-                    <motion.div className={`p-3 rounded-lg ${service.bgColor} border ${service.borderColor}`} whileHover={{ scale: 1.1, rotate: 5 }}>
+                    <div
+                        className={`p-3 rounded-lg ${service.bgColor} border ${service.borderColor}`}>
                         <Icon className={`w-6 h-6 ${service.color}`} />
-                    </motion.div>
-
+                    </div>
                     <div className="flex items-center gap-2 text-xs text-gray-400">
                         <Clock className="w-3 h-3" />
-                        <span className="line-clamp-1">{service.duration.split("|")[0].trim()}</span>
+                        <span className="line-clamp-1">
+                            {service.duration.split("|")[0].trim()}
+                        </span>
                     </div>
                 </div>
 
-                <h3 className="text-lg font-bold text-white mb-2">{service.title}</h3>
+                <h3 className="text-lg font-bold text-white mb-2">
+                    {service.title}
+                </h3>
 
-                {/* Pricing */}
                 <div className="flex items-center gap-3 mb-3">
-                    <span className="text-sm text-gray-400 line-through">{service.actualPrice}</span>
-                    <span className={`font-bold ${service.color}`}>{service.offerPrice}</span>
+                    <span className="text-sm text-gray-400 line-through">
+                        {service.actualPrice}
+                    </span>
+                    <span className={`font-bold ${service.color}`}>
+                        {service.offerPrice}
+                    </span>
                 </div>
 
-                {/* Description - Always visible */}
-                <p className="text-sm text-gray-300 leading-relaxed mb-4">{service.description}</p>
+                <p className="text-sm text-gray-300 leading-relaxed mb-4">
+                    {service.description}
+                </p>
             </div>
 
-            {/* Highlights - Collapsible */}
+            {/* Highlights — collapsible */}
             <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: expanded ? "auto" : 0, opacity: expanded ? 1 : 0 }}
+                initial={false}
+                animate={{
+                    height: expanded ? "auto" : 0,
+                    opacity: expanded ? 1 : 0,
+                }}
                 transition={{ duration: 0.3 }}
-                className="overflow-hidden mb-4"
-            >
+                className="overflow-hidden mb-4">
                 <div className="pt-3 border-t border-white/10">
-                    <h4 className="text-xs font-bold text-gray-300 uppercase mb-3 tracking-wider">Key Features</h4>
+                    <h4 className="text-xs font-bold text-gray-300 uppercase mb-3 tracking-wider">
+                        Key Features
+                    </h4>
                     <div className="space-y-2">
                         {service.highlights.map((item, hIdx) => (
-                            <motion.div
-                                key={hIdx}
-                                initial={{ opacity: 0, x: -10 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: hIdx * 0.05 }}
-                                className="flex items-start gap-2"
-                            >
-                                <CheckCircle className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${service.color}`} />
-                                <span className="text-xs text-gray-400">{item}</span>
-                            </motion.div>
+                            // ✅ Fixed: static list items — no entrance animation that re-fires on parent re-render
+                            <div key={hIdx} className="flex items-start gap-2">
+                                <CheckCircle
+                                    className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${service.color}`}
+                                />
+                                <span className="text-xs text-gray-400">
+                                    {item}
+                                </span>
+                            </div>
                         ))}
                     </div>
 
-                    {/* Outcome */}
                     <div className="mt-4 pt-3 border-t border-white/10">
                         <p className="text-xs text-gray-300">
-                            <span className="font-bold text-yellow-400">Your Outcome:</span> {service.outcome}
+                            <span className="font-bold text-yellow-400">
+                                Your Outcome:
+                            </span>{" "}
+                            {service.outcome}
                         </p>
                     </div>
                 </div>
             </motion.div>
 
-            {/* Action Buttons */}
+            {/* Actions */}
             <div className="flex gap-3">
-                <motion.button
+                <button
                     onClick={onToggleExpand}
-                    whileTap={{ scale: 0.95 }}
                     className={`flex-1 px-4 py-2 rounded-lg border transition-all text-sm font-semibold flex items-center justify-center gap-2 ${
                         expanded
-                            ? `border-white/30 text-gray-300 hover:bg-white/5`
+                            ? "border-white/30 text-gray-300 hover:bg-white/5"
                             : `${service.borderColor} text-gray-300 hover:border-white/50`
-                    }`}
-                >
+                    }`}>
                     <span>{expanded ? "Show Less" : "Details"}</span>
-                    <ChevronDown className={`w-4 h-4 transition-transform ${expanded ? "rotate-180" : ""}`} />
-                </motion.button>
+                    <ChevronDown
+                        className={`w-4 h-4 transition-transform duration-300 ${expanded ? "rotate-180" : ""}`}
+                    />
+                </button>
 
                 <motion.button
                     onClick={onWhatsApp}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    className={`flex-1 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-lg font-semibold flex items-center justify-center gap-2 transition-all text-sm`}
-                >
+                    className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-lg font-semibold flex items-center justify-center gap-2 transition-all text-sm">
                     <span>Enroll</span>
                     <ArrowRight className="w-4 h-4" />
                 </motion.button>

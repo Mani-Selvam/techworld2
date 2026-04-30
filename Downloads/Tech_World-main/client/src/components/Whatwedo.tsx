@@ -1,4 +1,5 @@
-import { motion } from "framer-motion";
+"use client";
+
 import {
     GraduationCap,
     BookOpen,
@@ -10,530 +11,396 @@ import {
     ChevronLeft,
     ChevronRight,
 } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
+// ─── Device detection — once, no resize listener ──────────────────────────────
+const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+const isTablet =
+    typeof window !== "undefined" &&
+    window.innerWidth >= 768 &&
+    window.innerWidth < 1024;
+const iconSize = isMobile ? 80 : isTablet ? 120 : 160;
+const titleSize = isMobile ? "text-xl" : isTablet ? "text-2xl" : "text-3xl";
+const descSize = isMobile ? "text-base" : isTablet ? "text-lg" : "text-xl";
+
+// ─── Static course data ───────────────────────────────────────────────────────
+const COURSES = [
+    {
+        title: "Master Blockchain Certification",
+        description: "60-hour advanced hands-on program",
+        icon: GraduationCap,
+        colorKey: "indigo",
+    },
+    {
+        title: "Blockchain & Fintech Education",
+        description: "From basics to expert level",
+        icon: BookOpen,
+        colorKey: "pink",
+    },
+    {
+        title: "Internships & Live Projects",
+        description: "Real-world blockchain experience",
+        icon: Briefcase,
+        colorKey: "green",
+    },
+    {
+        title: "Corporate & College Training",
+        description: "Customized programs for institutions",
+        icon: Building2,
+        colorKey: "amber",
+    },
+    {
+        title: "Web3 Awareness Programs",
+        description: "Free workshops to spread knowledge",
+        icon: Globe,
+        colorKey: "indigo",
+    },
+    {
+        title: "University Curriculum Development",
+        description: "Full academic blockchain setup",
+        icon: School,
+        colorKey: "pink",
+    },
+    {
+        title: "1-to-1 Mentorship",
+        description: "Personalized career guidance",
+        icon: UserCheck,
+        colorKey: "green",
+    },
+] as const;
+
+// ─── Color map — computed once, never recalculated ───────────────────────────
+const COLOR_MAP: Record<
+    string,
+    { text: string; glow: string; ring: string; bar: string }
+> = {
+    indigo: {
+        text: "text-indigo-400",
+        glow: "rgba(99,102,241,.55)",
+        ring: "border-indigo-400",
+        bar: "from-indigo-500 to-purple-500",
+    },
+    pink: {
+        text: "text-pink-400",
+        glow: "rgba(236,72,153,.55)",
+        ring: "border-pink-400",
+        bar: "from-pink-500 to-rose-500",
+    },
+    green: {
+        text: "text-green-400",
+        glow: "rgba(34,197,94,.55)",
+        ring: "border-green-400",
+        bar: "from-green-500 to-emerald-500",
+    },
+    amber: {
+        text: "text-amber-400",
+        glow: "rgba(251,146,60,.55)",
+        ring: "border-amber-400",
+        bar: "from-amber-500 to-orange-500",
+    },
+};
+
+// Pre-computed orbit angles for 8 particles — no Math.random() in render
+const ORBIT_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
+
+// Pre-computed floating dot positions (static, deterministic)
+const FLOAT_DOTS = [
+    { top: "20%", left: "10%", dur: "2.2s", delay: "0s" },
+    { top: "30%", left: "80%", dur: "2.6s", delay: "0.3s" },
+    { top: "60%", left: "15%", dur: "3.0s", delay: "0.6s" },
+    { top: "70%", left: "75%", dur: "2.4s", delay: "0.9s" },
+    { top: "45%", left: "90%", dur: "2.8s", delay: "0.4s" },
+    { top: "80%", left: "40%", dur: "3.2s", delay: "0.2s" },
+    { top: "25%", left: "55%", dur: "2.0s", delay: "0.7s" },
+    { top: "55%", left: "30%", dur: "2.9s", delay: "1.0s" },
+];
+
+// Pre-computed background shapes (static positions)
+const BG_SHAPES = !isMobile
+    ? [
+          { w: 60, h: 60, left: "8%", top: "15%", clip: 0, dur: "22s" },
+          { w: 100, h: 100, left: "78%", top: "10%", clip: 1, dur: "28s" },
+          { w: 50, h: 50, left: "45%", top: "70%", clip: 2, dur: "18s" },
+          { w: 80, h: 80, left: "20%", top: "60%", clip: 0, dur: "25s" },
+          { w: 70, h: 70, left: "85%", top: "55%", clip: 1, dur: "30s" },
+          { w: 90, h: 90, left: "60%", top: "25%", clip: 2, dur: "20s" },
+      ]
+    : [];
+const CLIPS = [
+    "polygon(50% 0%,0% 100%,100% 100%)",
+    "polygon(50% 0%,100% 50%,50% 100%,0% 50%)",
+    "polygon(25% 0%,75% 0%,100% 50%,75% 100%,25% 100%,0% 50%)",
+];
+
+// ─── Keyframes injected once ──────────────────────────────────────────────────
+const KEYFRAMES = `
+  @keyframes ecGradient  { 0%,100%{background-position:0% 50%} 50%{background-position:100% 50%} }
+  @keyframes ecFadeUp    { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes ecFadeScale { from{opacity:0;transform:scale(.85)} to{opacity:1;transform:scale(1)} }
+  @keyframes ecOrbit     { from{transform:rotate(var(--a)) translateX(var(--r))} to{transform:rotate(calc(var(--a)+360deg)) translateX(var(--r))} }
+  @keyframes ecIconRock  { 0%,100%{transform:rotate(0deg)} 25%{transform:rotate(4deg)} 75%{transform:rotate(-4deg)} }
+  @keyframes ecRingGlow  { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+  @keyframes ecPulseGlow { 0%,100%{opacity:.5;transform:scale(1)} 50%{opacity:.8;transform:scale(1.2)} }
+  @keyframes ecFloatDot  { 0%,100%{opacity:0;transform:translateY(0) scale(0)} 50%{opacity:.7;transform:translateY(-18px) scale(1)} }
+  @keyframes ecShapeRot  { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+  @keyframes ecRadialPulse { 0%,100%{opacity:.04;transform:scale(1)} 50%{opacity:.1;transform:scale(1.1)} }
+  @keyframes ecUnderline { from{transform:scaleX(0)} to{transform:scaleX(1)} }
+`;
+if (typeof document !== "undefined" && !document.getElementById("ec-kf")) {
+    const s = document.createElement("style");
+    s.id = "ec-kf";
+    s.textContent = KEYFRAMES;
+    document.head.appendChild(s);
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
 export default function ExploreCourses() {
-    const [screenSize, setScreenSize] = useState<
-        "mobile" | "tablet" | "desktop"
-    >("desktop");
-    const [activeCourseIndex, setActiveCourseIndex] = useState(0);
-    const [isTransitioning, setIsTransitioning] = useState(false);
-    const [particles, setParticles] = useState<
-        Array<{ id: number; x: number; y: number }>
-    >([]);
-    const [touchStart, setTouchStart] = useState<number | null>(null);
-    const [touchEnd, setTouchEnd] = useState<number | null>(null);
-    const sectionRef = useRef<HTMLDivElement>(null);
+    const [activeIdx, setActiveIdx] = useState(0);
+    const [fading, setFading] = useState(false);
+    const touchStart = useRef<number | null>(null);
+    const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-    const courses = [
-        {
-            title: "Master Blockchain Certification",
-            description: "60-hour advanced hands-on program",
-            icon: GraduationCap,
-            color: "primary",
-        },
-        {
-            title: "Blockchain & Fintech Education",
-            description: "From basics to expert level",
-            icon: BookOpen,
-            color: "accent",
-        },
-        {
-            title: "Internships & Live Projects",
-            description: "Real-world blockchain experience",
-            icon: Briefcase,
-            color: "secondary",
-        },
-        {
-            title: "Corporate & College Training",
-            description: "Customized programs for institutions",
-            icon: Building2,
-            color: "tertiary",
-        },
-        {
-            title: "Web3 Awareness Programs",
-            description: "Free workshops to spread knowledge",
-            icon: Globe,
-            color: "primary",
-        },
-        {
-            title: "University Curriculum Development",
-            description: "Full academic blockchain setup",
-            icon: School,
-            color: "accent",
-        },
-        {
-            title: "1-to-1 Mentorship",
-            description: "Personalized career guidance",
-            icon: UserCheck,
-            color: "secondary",
-        },
-    ];
-
-    // Minimum swipe distance in pixels
-    const minSwipeDistance = 50;
-
-    // Check screen size
-    useEffect(() => {
-        const checkScreenSize = () => {
-            const width = window.innerWidth;
-            if (width < 768) {
-                setScreenSize("mobile");
-            } else if (width < 1024) {
-                setScreenSize("tablet");
-            } else {
-                setScreenSize("desktop");
-            }
-        };
-
-        checkScreenSize();
-        window.addEventListener("resize", checkScreenSize);
-
-        return () => window.removeEventListener("resize", checkScreenSize);
+    const go = useCallback((next: number) => {
+        setFading(true);
+        setTimeout(() => {
+            setActiveIdx(next);
+            setFading(false);
+        }, 280);
     }, []);
 
-    // Auto-rotate through courses
+    const handlePrev = useCallback(() => {
+        go((activeIdx - 1 + COURSES.length) % COURSES.length);
+    }, [activeIdx, go]);
+
+    const handleNext = useCallback(() => {
+        go((activeIdx + 1) % COURSES.length);
+    }, [activeIdx, go]);
+
+    // ── Auto-rotate — stable interval, not recreated every index change ───────
     useEffect(() => {
-        const interval = setInterval(() => {
-            handleNext();
+        intervalRef.current = setInterval(() => {
+            setActiveIdx((i) => (i + 1) % COURSES.length);
         }, 4000);
+        return () => clearInterval(intervalRef.current!);
+    }, []); // empty deps — never recreated
 
-        return () => clearInterval(interval);
-    }, [activeCourseIndex]);
-
-    // Generate particles around the icon
-    useEffect(() => {
-        const newParticles = Array.from({ length: 12 }, (_, i) => ({
-            id: Date.now() + i,
-            x: Math.random() * 360,
-            y: Math.random() * 360,
-        }));
-        setParticles(newParticles);
-    }, [activeCourseIndex]);
-
-    // Function to get color classes based on color type
-    const getColorClasses = (colorType: string) => {
-        switch (colorType) {
-            case "primary":
-                return {
-                    text: "text-indigo-500",
-                    glow: "rgba(99, 102, 241, 0.6)",
-                    particle: "rgba(99, 102, 241, 0.3)",
-                };
-            case "accent":
-                return {
-                    text: "text-pink-500",
-                    glow: "rgba(236, 72, 153, 0.6)",
-                    particle: "rgba(236, 72, 153, 0.3)",
-                };
-            case "secondary":
-                return {
-                    text: "text-green-500",
-                    glow: "rgba(34, 197, 94, 0.6)",
-                    particle: "rgba(34, 197, 94, 0.3)",
-                };
-            case "tertiary":
-                return {
-                    text: "text-amber-500",
-                    glow: "rgba(251, 146, 60, 0.6)",
-                    particle: "rgba(251, 146, 60, 0.3)",
-                };
-            default:
-                return {
-                    text: "text-purple-500",
-                    glow: "rgba(147, 51, 234, 0.6)",
-                    particle: "rgba(147, 51, 234, 0.3)",
-                };
-        }
-    };
-
-    const handlePrev = () => {
-        if (isTransitioning) return;
-        setIsTransitioning(true);
-        setTimeout(() => {
-            setActiveCourseIndex(
-                (prev) => (prev - 1 + courses.length) % courses.length
-            );
-            setIsTransitioning(false);
-        }, 300);
-    };
-
-    const handleNext = () => {
-        if (isTransitioning) return;
-        setIsTransitioning(true);
-        setTimeout(() => {
-            setActiveCourseIndex((prev) => (prev + 1) % courses.length);
-            setIsTransitioning(false);
-        }, 300);
-    };
-
-    const handleDotClick = (index: number) => {
-        if (isTransitioning || index === activeCourseIndex) return;
-        setIsTransitioning(true);
-        setTimeout(() => {
-            setActiveCourseIndex(index);
-            setIsTransitioning(false);
-        }, 300);
-    };
-
-    // Touch event handlers for swipe functionality
+    // Touch swipe — refs instead of state (no re-renders on touch move)
     const onTouchStart = (e: React.TouchEvent) => {
-        setTouchEnd(null);
-        setTouchStart(e.targetTouches[0].clientX);
+        touchStart.current = e.targetTouches[0].clientX;
+    };
+    const onTouchEnd = (e: React.TouchEvent) => {
+        if (touchStart.current === null) return;
+        const dist = touchStart.current - e.changedTouches[0].clientX;
+        if (Math.abs(dist) > 50) dist > 0 ? handleNext() : handlePrev();
+        touchStart.current = null;
     };
 
-    const onTouchMove = (e: React.TouchEvent) => {
-        setTouchEnd(e.targetTouches[0].clientX);
-    };
-
-    const onTouchEnd = () => {
-        if (!touchStart || !touchEnd) return;
-
-        const distance = touchStart - touchEnd;
-        const isLeftSwipe = distance > minSwipeDistance;
-        const isRightSwipe = distance < -minSwipeDistance;
-
-        if (isLeftSwipe) {
-            handleNext();
-        }
-        if (isRightSwipe) {
-            handlePrev();
-        }
-    };
-
-    // Determine dimensions based on screen size
-    const getDimensions = () => {
-        if (screenSize === "mobile") {
-            return {
-                iconSize: 80,
-                titleSize: "text-xl",
-                descriptionSize: "text-base",
-            };
-        } else if (screenSize === "tablet") {
-            return {
-                iconSize: 120,
-                titleSize: "text-2xl",
-                descriptionSize: "text-lg",
-            };
-        } else {
-            return {
-                iconSize: 160,
-                titleSize: "text-3xl",
-                descriptionSize: "text-xl",
-            };
-        }
-    };
-
-    const { iconSize, titleSize, descriptionSize } = getDimensions();
-    const currentCourse = courses[activeCourseIndex];
-    const colors = getColorClasses(currentCourse.color);
-    const IconComponent = currentCourse.icon;
+    const course = COURSES[activeIdx];
+    const color = COLOR_MAP[course.colorKey];
+    const Icon = course.icon;
+    const orbitR = `${iconSize + 32}px`;
 
     return (
         <section
-            ref={sectionRef}
             className="py-20 bg-background relative overflow-hidden min-h-screen"
             style={{ height: "90vh" }}
             id="courses">
-            {/* Animated Background - Simplified on mobile */}
-            <div className="absolute inset-0 overflow-hidden hidden md:block">
-                {/* Dynamic Gradient Background */}
-                <motion.div
-                    className="absolute inset-0"
-                    style={{
-                        background: `radial-gradient(circle at 50% 50%, ${colors.glow} 0%, transparent 50%)`,
-                    }}
-                    animate={{
-                        scale: [1, 1.1, 1],
-                        opacity: [0.05, 0.1, 0.05],
-                    }}
-                    transition={{
-                        duration: 6,
-                        repeat: Infinity,
-                        ease: "easeInOut",
-                    }}
-                />
-
-                {/* Floating Geometric Shapes - Desktop only */}
-                {[...Array(6)].map((_, i) => (
-                    <motion.div
-                        key={i}
-                        className="absolute border"
+            {/* ── Static radial background glow — CSS only ──────────────────── */}
+            {!isMobile && (
+                <div
+                    className="absolute inset-0 pointer-events-none"
+                    aria-hidden>
+                    <div
+                        className="absolute inset-0"
                         style={{
-                            width: `${Math.random() * 80 + 40}px`,
-                            height: `${Math.random() * 80 + 40}px`,
-                            left: `${Math.random() * 100}%`,
-                            top: `${Math.random() * 100}%`,
-                            borderColor: colors.particle,
-                            transform: `rotate(${Math.random() * 360}deg)`,
-                            clipPath:
-                                i % 3 === 0
-                                    ? "polygon(50% 0%, 0% 100%, 100% 100%)"
-                                    : i % 3 === 1
-                                    ? "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)"
-                                    : "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)",
-                        }}
-                        animate={{
-                            rotate: [0, 180],
-                            opacity: [0.08, 0.15, 0.08],
-                            scale: [1, 1.1, 1],
-                        }}
-                        transition={{
-                            duration: 20 + i * 3,
-                            repeat: Infinity,
-                            ease: "linear",
+                            background: `radial-gradient(circle at 50% 50%, ${color.glow} 0%, transparent 50%)`,
+                            animation: "ecRadialPulse 6s ease-in-out infinite",
                         }}
                     />
-                ))}
-            </div>
+
+                    {/* Pre-computed rotating shapes */}
+                    {BG_SHAPES.map((s, i) => (
+                        <div
+                            key={i}
+                            className="absolute border border-current opacity-10"
+                            style={{
+                                width: s.w,
+                                height: s.h,
+                                left: s.left,
+                                top: s.top,
+                                color: color.glow,
+                                clipPath: CLIPS[s.clip],
+                                animation: `ecShapeRot ${s.dur} linear infinite`,
+                            }}
+                        />
+                    ))}
+                </div>
+            )}
 
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 h-full flex flex-col">
                 {/* Title */}
-                <motion.div
+                <div
                     className="text-center mb-8 md:mb-12"
-                    initial={{ opacity: 0, y: 40 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.8, ease: "easeOut" }}
-                    viewport={{ once: true, margin: "-100px" }}>
+                    style={{ animation: "ecFadeUp 0.7s ease forwards" }}>
                     <h2 className="text-3xl md:text-5xl font-bold mb-4 md:mb-6">
                         <span
-                            className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-transparent"
+                            className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-transparent inline-block"
                             style={{
                                 backgroundSize: "300% 300%",
-                                animation: "gradientMove 6s ease infinite",
-                                display: "inline-block",
+                                animation: "ecGradient 6s ease infinite",
                             }}>
                             What We Do
                         </span>
-                        <style>
-                            {`
-              @keyframes gradientMove {
-                0% { background-position: 0% 0%; }
-                25% { background-position: 100% 0%; }
-                50% { background-position: 100% 100%; }
-                75% { background-position: 0% 100%; }
-                100% { background-position: 0% 0%; }
-              }
-            `}
-                        </style>
                     </h2>
                     <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto">
                         Transforming Learners into Leaders of the Web3
                         Revolution.
                     </p>
-                </motion.div>
+                </div>
 
-                {/* Single Course Display with Effects */}
+                {/* Course display */}
                 <div
                     className="flex-grow flex items-center justify-center relative"
                     onTouchStart={onTouchStart}
-                    onTouchMove={onTouchMove}
                     onTouchEnd={onTouchEnd}>
-                    {/* Navigation Buttons */}
-                    {screenSize !== "mobile" && (
+                    {/* Nav buttons — desktop/tablet only */}
+                    {!isMobile && (
                         <>
-                            <motion.button
-                                className="absolute left-0 z-20 p-2 rounded-full bg-white/5 backdrop-blur-sm border border-white/10 text-white hover:bg-white/10 transition-colors"
-                                whileHover={{ scale: 1.1 }}
-                                whileTap={{ scale: 0.9 }}
-                                onClick={handlePrev}>
+                            <button
+                                onClick={handlePrev}
+                                className="absolute left-0 z-20 p-2 rounded-full bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-colors">
                                 <ChevronLeft size={24} />
-                            </motion.button>
-                            <motion.button
-                                className="absolute right-0 z-20 p-2 rounded-full bg-white/5 backdrop-blur-sm border border-white/10 text-white hover:bg-white/10 transition-colors"
-                                whileHover={{ scale: 1.1 }}
-                                whileTap={{ scale: 0.9 }}
-                                onClick={handleNext}>
+                            </button>
+                            <button
+                                onClick={handleNext}
+                                className="absolute right-0 z-20 p-2 rounded-full bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-colors">
                                 <ChevronRight size={24} />
-                            </motion.button>
+                            </button>
                         </>
                     )}
 
-                    {/* Course Content with Effects */}
-                    <motion.div
-                        key={activeCourseIndex}
+                    {/* Content — CSS fade/scale transition on index change */}
+                    <div
                         className="flex flex-col items-center justify-center text-center relative"
-                        initial={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.8 }}
-                        transition={{ duration: 0.6, ease: "easeOut" }}>
-                        {/* Orbiting Particles */}
-                        {particles.map((particle, i) => (
-                            <motion.div
-                                key={particle.id}
-                                className="absolute w-2 h-2 rounded-full"
+                        style={{
+                            opacity: fading ? 0 : 1,
+                            transform: fading ? "scale(.88)" : "scale(1)",
+                            transition:
+                                "opacity .28s ease, transform .28s ease",
+                            animation: fading
+                                ? "none"
+                                : "ecFadeScale .35s ease",
+                        }}>
+                        {/* Orbiting particles — CSS @keyframes, no Framer Motion */}
+                        {ORBIT_ANGLES.map((angle, i) => (
+                            <div
+                                key={i}
+                                className="absolute w-2 h-2 rounded-full pointer-events-none"
                                 style={{
-                                    backgroundColor: colors.particle,
-                                    boxShadow: `0 0 10px ${colors.glow}`,
-                                    transformOrigin: `${iconSize / 2}px center`,
-                                    transform: `rotate(${
-                                        particle.x
-                                    }deg) translateX(${iconSize + 30}px)`,
-                                }}
-                                animate={{
-                                    rotate: [0, 360],
-                                    scale: [1, 1.5, 1],
-                                    opacity: [0.3, 0.8, 0.3],
-                                }}
-                                transition={{
-                                    duration: 3 + i * 0.5,
-                                    repeat: Infinity,
-                                    ease: "linear",
-                                    delay: i * 0.2,
+                                    backgroundColor: color.glow,
+                                    boxShadow: `0 0 8px ${color.glow}`,
+                                    // CSS custom props drive the keyframe
+                                    ["--a" as string]: `${angle}deg`,
+                                    ["--r" as string]: orbitR,
+                                    animation: `ecOrbit ${3 + i * 0.4}s linear infinite`,
+                                    animationDelay: `${i * 0.18}s`,
                                 }}
                             />
                         ))}
 
-                        {/* Icon with Glow Effect */}
-                        <motion.div
-                            className="relative flex items-center justify-center mb-8"
+                        {/* Icon */}
+                        <div
+                            className="relative flex items-center justify-center mb-8 flex-shrink-0"
                             style={{
-                                width: `${iconSize}px`,
-                                height: `${iconSize}px`,
-                            }}
-                            animate={{
-                                rotate: [0, 5, -5, 0],
-                            }}
-                            transition={{
-                                duration: 4,
-                                repeat: Infinity,
+                                width: iconSize,
+                                height: iconSize,
+                                animation: "ecIconRock 4s ease-in-out infinite",
                             }}>
-                            {/* Glow Ring */}
-                            <motion.div
-                                className="absolute inset-0 rounded-full"
-                                style={{
-                                    background: `conic-gradient(from 0deg, transparent, ${colors.glow}, transparent)`,
-                                    filter: "blur(2px)",
-                                }}
-                                animate={{
-                                    rotate: [0, 360],
-                                }}
-                                transition={{
-                                    duration: 8,
-                                    repeat: Infinity,
-                                    ease: "linear",
-                                }}
-                            />
-
-                            {/* Inner Glow */}
-                            <motion.div
+                            {/* Rotating conic glow ring */}
+                            {!isMobile && (
+                                <div
+                                    className="absolute inset-0 rounded-full"
+                                    style={{
+                                        background: `conic-gradient(from 0deg, transparent, ${color.glow}, transparent)`,
+                                        filter: "blur(2px)",
+                                        animation:
+                                            "ecRingGlow 8s linear infinite",
+                                    }}
+                                />
+                            )}
+                            {/* Inner radial glow */}
+                            <div
                                 className="absolute inset-2 rounded-full"
                                 style={{
-                                    background: `radial-gradient(circle, ${colors.glow}, transparent)`,
+                                    background: `radial-gradient(circle, ${color.glow}, transparent)`,
                                     filter: "blur(8px)",
-                                }}
-                                animate={{
-                                    scale: [1, 1.2, 1],
-                                    opacity: [0.5, 0.8, 0.5],
-                                }}
-                                transition={{
-                                    duration: 2,
-                                    repeat: Infinity,
-                                    ease: "easeInOut",
+                                    animation:
+                                        "ecPulseGlow 2s ease-in-out infinite",
                                 }}
                             />
-
-                            {/* Icon */}
-                            <IconComponent
+                            <Icon
                                 size={iconSize / 2}
-                                className={`${colors.text} relative z-10`}
+                                className={`${color.text} relative z-10`}
                                 style={{
-                                    filter: `drop-shadow(0 0 20px ${colors.glow})`,
+                                    filter: `drop-shadow(0 0 16px ${color.glow})`,
                                 }}
-                            />
-                        </motion.div>
-
-                        {/* Title with Animated Underline */}
-                        <div className="relative mb-4">
-                            <motion.h3
-                                className={`font-bold ${titleSize} ${colors.text}`}
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.5, delay: 0.1 }}
-                                style={{
-                                    textShadow: `0 0 20px ${colors.glow}`,
-                                }}>
-                                {currentCourse.title}
-                            </motion.h3>
-
-                            {/* Animated Underline */}
-                            <motion.div
-                                className="absolute -bottom-2 left-0 right-0 h-0.5"
-                                style={{
-                                    background: `linear-gradient(90deg, transparent, ${colors.glow}, transparent)`,
-                                }}
-                                initial={{ scaleX: 0 }}
-                                animate={{ scaleX: 1 }}
-                                transition={{ duration: 0.8, delay: 0.5 }}
                             />
                         </div>
 
-                        {/* Description with Typewriter Effect */}
-                        <motion.p
-                            className={`${descriptionSize} text-muted-foreground max-w-2xl`}
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ duration: 0.5, delay: 0.3 }}>
-                            {currentCourse.description}
-                        </motion.p>
-
-                        {/* Floating Dots */}
-                        {[...Array(8)].map((_, i) => (
-                            <motion.div
-                                key={`dot-${i}`}
-                                className="absolute w-1 h-1 rounded-full"
+                        {/* Title + animated underline */}
+                        <div className="relative mb-4">
+                            <h3
+                                className={`font-bold ${titleSize} ${color.text}`}
                                 style={{
-                                    backgroundColor: colors.particle,
-                                    top: `${20 + Math.random() * 60}%`,
-                                    left: `${10 + Math.random() * 80}%`,
+                                    textShadow: `0 0 18px ${color.glow}`,
+                                }}>
+                                {course.title}
+                            </h3>
+                            <div
+                                className="absolute -bottom-2 left-0 right-0 h-0.5 origin-center"
+                                style={{
+                                    background: `linear-gradient(90deg, transparent, ${color.glow}, transparent)`,
+                                    animation: "ecUnderline .8s ease .2s both",
                                 }}
-                                animate={{
-                                    y: [0, -20, 0],
-                                    opacity: [0, 1, 0],
-                                    scale: [0, 1, 0],
-                                }}
-                                transition={{
-                                    duration: 2 + i * 0.3,
-                                    repeat: Infinity,
-                                    delay: i * 0.2,
+                            />
+                        </div>
+
+                        {/* Description */}
+                        <p
+                            className={`${descSize} text-muted-foreground max-w-2xl mt-4`}>
+                            {course.description}
+                        </p>
+
+                        {/* Pre-computed floating dots */}
+                        {FLOAT_DOTS.map((d, i) => (
+                            <div
+                                key={i}
+                                className="absolute w-1 h-1 rounded-full pointer-events-none"
+                                style={{
+                                    backgroundColor: color.glow,
+                                    top: d.top,
+                                    left: d.left,
+                                    animation: `ecFloatDot ${d.dur} ease-in-out infinite ${d.delay}`,
                                 }}
                             />
                         ))}
-                    </motion.div>
+                    </div>
                 </div>
 
-                {/* Carousel Indicators with Pulse Effect */}
-                <div className="flex justify-center mt-8 space-x-2">
-                    {courses.map((_, index) => (
-                        <motion.button
-                            key={index}
-                            className={`h-2 rounded-full transition-all ${
-                                index === activeCourseIndex
-                                    ? screenSize === "mobile"
-                                        ? "w-8"
-                                        : "w-12"
-                                    : "w-2 bg-gray-400"
+                {/* Dot indicators */}
+                <div className="flex justify-center mt-8 gap-2">
+                    {COURSES.map((_, i) => (
+                        <button
+                            key={i}
+                            onClick={() => go(i)}
+                            className={`h-2 rounded-full transition-all duration-300 ${
+                                i === activeIdx
+                                    ? "bg-gradient-to-r " +
+                                      color.bar +
+                                      (isMobile ? " w-8" : " w-12")
+                                    : "w-2 bg-gray-500/50"
                             }`}
-                            style={{
-                                background:
-                                    index === activeCourseIndex
-                                        ? `linear-gradient(90deg, ${colors.glow}, ${colors.particle})`
-                                        : "",
-                            }}
-                            onClick={() => handleDotClick(index)}
-                            whileHover={{ scale: 1.2 }}
-                            whileTap={{ scale: 0.8 }}
-                            animate={{
-                                opacity:
-                                    index === activeCourseIndex
-                                        ? [1, 0.7, 1]
-                                        : 0.4,
-                            }}
-                            transition={{
-                                duration: 2,
-                                repeat:
-                                    index === activeCourseIndex ? Infinity : 0,
-                            }}
+                            aria-label={`Go to course ${i + 1}`}
                         />
                     ))}
                 </div>

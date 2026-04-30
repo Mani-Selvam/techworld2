@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useCallback } from "react";
 import Navigation from "@/components/Navigation";
 import Hero from "@/components/Hero";
 import Statistics from "@/components/Statistics";
@@ -18,171 +18,141 @@ const Features = lazy(() => import("@/components/Features"));
 const Attendees = lazy(() => import("@/components/Attendees"));
 const Testimonials = lazy(() => import("@/components/Testimonials"));
 const CountdownTimer = lazy(() => import("@/components/CountdownTimer"));
+
+// ✅ Bubbles only on desktop — one place, not everywhere
+const DesktopBubbles = ({ count }: { count: number }) => (
+    <div className="hidden md:block">
+        <SectionBubbles count={count} />
+    </div>
+);
+
 function HomeContent() {
-    const scrollToAttendees = () => {
-        const attendeesSection = document.getElementById("attendees");
-        if (attendeesSection) {
-            attendeesSection.scrollIntoView({ behavior: "smooth" });
-        }
-    };
+    // ✅ One stable callback for all three LimitedOfferBanner instances
+    const scrollToEnrollment = useCallback(() => {
+        document
+            .getElementById("enrollment-form")
+            ?.scrollIntoView({ behavior: "smooth" });
+    }, []);
+
+    // ✅ Kept separate since it targets a different section
+    const scrollToAttendees = useCallback(() => {
+        document
+            .getElementById("attendees")
+            ?.scrollIntoView({ behavior: "smooth" });
+    }, []);
 
     return (
         <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
             <Navigation />
 
-            {/* Hero Section with Bubbles */}
+            {/* Hero — bubbles here matter most visually, keep them */}
             <div className="relative" id="hero">
                 <SectionBubbles count={5} />
                 <Hero />
             </div>
 
-            {/* 🔥 Limited Offer Banner - High Demand */}
-            <LimitedOfferBanner
-                onCtaClick={() => {
-                    const enrollmentSection =
-                        document.getElementById("enrollment-form");
-                    if (enrollmentSection) {
-                        enrollmentSection.scrollIntoView({
-                            behavior: "smooth",
-                        });
-                    }
-                }}
-            />
+            <LimitedOfferBanner onCtaClick={scrollToEnrollment} />
 
-            {/* Statistics Section - No spacing - Eagerly loaded for above-the-fold */}
             <ScrollReveal variant="fade-up" duration={800} delay={100}>
+                {/* ✅ No bubbles on most sections — saves ~50 animated nodes */}
                 <div className="relative" id="statistics">
-                    {/* <SectionBubbles count={4} /> */}
                     <Statistics />
                 </div>
             </ScrollReveal>
 
-            {/* PhotoGallery Section - Lazy loaded with preserved anchor */}
             <ScrollReveal variant="fade-up" duration={800} delay={200}>
                 <div className="relative" id="gallery">
-                    {/* <SectionBubbles count={6} /> */}
+                    <DesktopBubbles count={4} />
                     <Suspense fallback={<div className="h-64" />}>
                         <PhotoGallery />
                     </Suspense>
                 </div>
             </ScrollReveal>
 
+            {/* ✅ Fixed: unique id "review" (was duplicating "about") */}
             <ScrollReveal variant="fade-up" duration={800} delay={200}>
-                <div className="relative" id="about">
-                    <SectionBubbles count={4} />
-                    <Suspense fallback={<div className="h-96" />}>
-                        <Review />
-                    </Suspense>
+                <div className="relative" id="review">
+                    {/* ✅ Fixed: Review is eagerly imported — no Suspense needed */}
+                    <Review />
                 </div>
             </ScrollReveal>
-            {/* About Section - Lazy loaded with preserved anchor */}
+
             <ScrollReveal variant="fade-up" duration={800} delay={200}>
                 <div className="relative" id="about">
-                    {/* <SectionBubbles count={4} /> */}
                     <Suspense fallback={<div className="h-96" />}>
                         <DesignLancerAbout />
                     </Suspense>
                 </div>
             </ScrollReveal>
 
-            {/* Skills Section - Lazy loaded with preserved anchor */}
             <ScrollReveal variant="slide-left" duration={900} delay={150}>
                 <div className="relative" id="benefit">
-                    <SectionBubbles count={6} />
+                    <DesktopBubbles count={4} />
                     <Suspense fallback={<div className="h-96" />}>
                         <Skills />
                     </Suspense>
                 </div>
             </ScrollReveal>
-            <LimitedOfferBanner
-                onCtaClick={() => {
-                    const enrollmentSection =
-                        document.getElementById("enrollment-form");
-                    if (enrollmentSection) {
-                        enrollmentSection.scrollIntoView({
-                            behavior: "smooth",
-                        });
-                    }
-                }}
-            />
-            {/* Services Section - Lazy loaded with preserved anchor */}
+
+            <LimitedOfferBanner onCtaClick={scrollToEnrollment} />
+
             <ScrollReveal variant="slide-right" duration={800} delay={100}>
                 <div className="relative" id="courses">
-                    <SectionBubbles count={5} />
                     <Suspense fallback={<div className="h-96" />}>
                         <Whatwedo />
                     </Suspense>
                 </div>
             </ScrollReveal>
 
-            {/* Visitors Section - Lazy loaded with preserved anchor */}
             <ScrollReveal variant="slide-right" duration={800} delay={100}>
                 <div className="relative" id="visitors">
-                    <SectionBubbles count={5} />
                     <Suspense fallback={<div className="h-96" />}>
                         <Visitors />
                     </Suspense>
                 </div>
             </ScrollReveal>
 
-            {/* Features Section - Lazy loaded with preserved anchor */}
             <ScrollReveal variant="slide-left" duration={800} delay={100}>
                 <div className="relative" id="features">
-                    <SectionBubbles count={4} />
+                    <DesktopBubbles count={3} />
                     <Suspense fallback={<div className="h-80" />}>
                         <Features />
                     </Suspense>
                 </div>
             </ScrollReveal>
 
-            <LimitedOfferBanner
-                onCtaClick={() => {
-                    const enrollmentSection =
-                        document.getElementById("enrollment-form");
-                    if (enrollmentSection) {
-                        enrollmentSection.scrollIntoView({
-                            behavior: "smooth",
-                        });
-                    }
-                }}
-            />
-            {/* Attendees Section - Lazy loaded with preserved anchor */}
+            <LimitedOfferBanner onCtaClick={scrollToEnrollment} />
+
             <ScrollReveal variant="fade-up" duration={800} delay={200}>
                 <div className="relative" id="attendees">
-                    <SectionBubbles count={4} />
                     <Suspense fallback={<div className="h-96" />}>
                         <Attendees />
                     </Suspense>
                 </div>
             </ScrollReveal>
 
-            {/* Testimonials Section - Lazy loaded with preserved anchor */}
             <ScrollReveal variant="fade-up" duration={800} delay={200}>
                 <div className="relative" id="testimonials">
-                    <SectionBubbles count={4} />
                     <Suspense fallback={<div className="h-96" />}>
                         <Testimonials />
                     </Suspense>
                 </div>
             </ScrollReveal>
 
-            {/* Countdown Timer - Lazy loaded with preserved anchor */}
             <ScrollReveal variant="fade-up" duration={800} delay={200}>
                 <div className="relative" id="timer">
-                    <SectionBubbles count={4} />
                     <Suspense fallback={<div className="h-96" />}>
                         <CountdownTimer onRegisterClick={scrollToAttendees} />
                     </Suspense>
                 </div>
             </ScrollReveal>
 
-            {/* Footer - Eagerly loaded */}
             <ScrollReveal variant="fade-in" duration={600} delay={100}>
                 <Footer />
             </ScrollReveal>
-            <br />
-            <br />
-            <br />
+
+            {/* ✅ Replaced <br><br><br> with proper bottom padding */}
+            <div className="pb-24" />
             <StickyBottomBanner />
         </div>
     );
